@@ -1,0 +1,37 @@
+import { NextRequest, NextResponse } from "next/server";
+import { getSessionUser } from "@/lib/auth";
+import { assertSameOrigin, clampNullable, clampStr, isSafeImageUrl, isValidSlug, safeId, safeInt } from "@/lib/security";
+import { updateCategory, deleteCategory } from "@/lib/store";
+
+export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  if (!assertSameOrigin(req)) return NextResponse.json({ ok: false, error: "অননুমোদিত রিকোয়েস্ট।" }, { status: 403 });
+  const user = await getSessionUser();
+  if (!user) return NextResponse.json({ ok: false, error: "অনুমতি নেই" }, { status: 401 });
+  const { id } = await params;
+  const cid = safeId(id);
+  if (!cid) return NextResponse.json({ ok: false, error: "সঠিক ক্যাটাগরি নয়।" }, { status: 400 });
+  const body = await req.json().catch(() => ({}));
+  if (body.nameBn !== undefined && !clampStr(body.nameBn, 140)) return NextResponse.json({ ok: false, error: "ক্যাটাগরির নাম দিন।" }, { status: 400 });
+  if (body.slug) { const s = clampStr(body.slug, 140); if (!isValidSlug(s)) return NextResponse.json({ ok: false, error: "স্লাগে শুধু অক্ষর, সংখ্যা, - ও _ ব্যবহার করুন।" }, { status: 400 }); }
+  if (body.image) { const im = clampStr(body.image, 2000); if (!isSafeImageUrl(im)) return NextResponse.json({ ok: false, error: "ছবির লিংক সঠিক নয়।" }, { status: 400 }); }
+  await updateCategory(cid, {
+    nameBn: body.nameBn !== undefined ? clampStr(body.nameBn, 140) : undefined,
+    slug: body.slug ? clampStr(body.slug, 140) : undefined,
+    image: body.image !== undefined ? clampNullable(body.image, 2000) : undefined,
+    description: body.description !== undefined ? clampNullable(body.description, 2000) : undefined,
+    sortOrder: body.sortOrder !== undefined ? safeInt(body.sortOrder, 0, 0, 1_000_000) : undefined,
+    isActive: body.isActive !== undefined ? Boolean(body.isActive) : undefined,
+  });
+  return NextResponse.json({ ok: true });
+}
+
+export async function DELETE(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  if (!assertSameOrigin(req)) return NextResponse.json({ ok: false, error: "অননুমোদিত রিকোয়েস্ট।" }, { status: 403 });
+  const user = await getSessionUser();
+  if (!user) return NextResponse.json({ ok: false, error: "অনুমতি নেই" }, { status: 401 });
+  const { id } = await params;
+  const cid = safeId(id);
+  if (!cid) return NextResponse.json({ ok: false, error: "সঠিক ক্যাটাগরি নয়।" }, { status: 400 });
+  await deleteCategory(cid);
+  return NextResponse.json({ ok: true });
+}
